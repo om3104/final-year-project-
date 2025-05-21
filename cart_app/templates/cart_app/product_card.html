@@ -1,0 +1,10 @@
+<div class="product-card" id="product-{{ product.id }}">
+    <h3>{{ product.name }}</h3>
+    <p>Price: ₹{{ product.price }}</p>
+    <div class="quantity-controls">
+        <button onclick="updateQuantity({{ product.id }}, 'decrease')">-</button>
+        <input type="number" value="{{ quantity }}" min="1" 
+               onchange="updateQuantity({{ product.id }}, 'set', this.value)">
+        <button onclick="updateQuantity({{ product.id }}, 'increase')">+</button>
+    </div>
+</div> 

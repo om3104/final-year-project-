@@ -1,0 +1,441 @@
+{% extends 'base.html' %}
+
+{% block title %}Shopping Cart{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+<!-- Weight Status Display -->
+<div id="weightStatus" class="fixed top-4 right-4 bg-white p-4 rounded-lg shadow-lg z-40">
+    <h4 class="text-sm font-medium text-gray-700 mb-2">Cart Weight Status</h4>
+    <div class="space-y-1">
+        <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Current Weight:</span>
+            <span id="currentWeight" class="text-sm font-medium">0.000 kg</span>
+        </div>
+        <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Expected Weight:</span>
+            <span id="statusExpectedWeight" class="text-sm font-medium">0.000 kg</span>
+        </div>
+        <div id="weightStatusIndicator" class="h-2 rounded-full bg-gray-200 mt-2">
+            <div id="weightStatusBar" class="h-full rounded-full transition-all duration-500 bg-green-500" style="width: 100%"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Weight Alert Modal -->
+<div id="weightAlertModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 hidden flex items-center justify-center z-50">
+    <div class="bg-white p-8 rounded-lg shadow-xl max-w-md w-full">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-medium text-red-600">
+                <i class="fas fa-exclamation-triangle mr-2"></i>Weight Alert
+            </h3>
+            <button onclick="closeWeightAlert()" class="text-gray-400 hover:text-gray-500">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="mb-4">
+            <p id="weightAlertMessage" class="text-gray-700 mb-2"></p>
+            <div class="bg-gray-50 p-3 rounded">
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm text-gray-600">Expected Weight:</span>
+                    <span id="expectedWeight" class="text-sm font-medium"></span>
+                </div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm text-gray-600">Measured Weight:</span>
+                    <span id="measuredWeight" class="text-sm font-medium"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-sm text-gray-600">Difference:</span>
+                    <span id="weightDifference" class="text-sm font-medium text-red-600"></span>
+                </div>
+            </div>
+        </div>
+        <div class="flex justify-end">
+            <button onclick="closeWeightAlert()" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+                Acknowledge
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Shopping Cart</h1>
+        <a href="{% url 'products' %}" class="text-indigo-600 hover:text-indigo-500">
+            <i class="fas fa-arrow-left mr-2"></i>Continue Shopping
+        </a>
+    </div>
+
+    {% if cart_items %}
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+        <ul class="divide-y divide-gray-200">
+            {% for item in cart_items %}
+            <li class="p-4 flex items-center justify-between cart-item" data-product-id="{{ item.product.id }}">
+                <div class="flex items-center">
+                    {% if item.product.image %}
+                    <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="h-16 w-16 object-cover rounded">
+                    {% else %}
+                    <div class="h-16 w-16 bg-gray-200 rounded flex items-center justify-center">
+                        <i class="fas fa-box text-gray-400 text-2xl"></i>
+                    </div>
+                    {% endif %}
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900">{{ item.product.name }}</h3>
+                        <p class="text-sm text-gray-500">Price: ₹{{ item.product.price }}</p>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <div class="quantity-controls flex items-center border rounded">
+                        <button onclick="updateQuantity({{ item.product.id }}, 'decrease')"
+                            class="px-3 py-1 text-gray-600 hover:bg-gray-100 border-r">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <input type="number" value="{{ item.quantity }}" min="1"
+                            onchange="updateQuantity({{ item.product.id }}, 'set', this.value)"
+                            class="w-16 text-center border-none focus:ring-0">
+                        <button onclick="updateQuantity({{ item.product.id }}, 'increase')"
+                            class="px-3 py-1 text-gray-600 hover:bg-gray-100 border-l">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <button onclick="updateQuantity({{ item.product.id }}, 'remove')"
+                        class="ml-4 text-red-600 hover:text-red-500">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="p-4 bg-gray-50">
+            <div class="flex justify-between items-center">
+                <span class="text-lg font-medium text-gray-900">Total:</span>
+                <span class="text-2xl font-bold text-indigo-600">₹{{ cart_total }}</span>
+            </div>
+            <div class="mt-4">
+                <a href="{% url 'checkout' %}"
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Proceed to Checkout
+                </a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-12">
+        <div class="text-6xl text-gray-400 mb-4">
+            <i class="fas fa-shopping-cart"></i>
+        </div>
+        <h3 class="text-xl font-medium text-gray-900 mb-2">Your cart is empty</h3>
+        <p class="text-gray-500 mb-6">Add some items to your cart to get started</p>
+        <a href="{% url 'products' %}"
+            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            <i class="fas fa-shopping-bag mr-2"></i>
+            Browse Products
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+{% block extra_js %}
+<script>
+    function getCsrfToken() {
+        const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        if (!csrfInput) {
+            console.error('CSRF token not found');
+            return '';
+        }
+        return csrfInput.value;
+    }
+
+    function updateQuantity(productId, action, value = null) {
+        let url = '{% url "update_quantity" %}';
+        let data = {
+            product_id: productId,
+            action: action
+        };
+        
+        if (value !== null) {
+            data.value = value;
+        }
+        
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            console.error('Cannot update cart: CSRF token missing');
+            return;
+        }
+        
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                if (action === 'remove') {
+                    // Remove the item from the UI immediately
+                    const itemElement = document.querySelector(`[data-product-id="${productId}"]`);
+                    if (itemElement) {
+                        itemElement.remove();
+                    }
+                    
+                    // Check if cart is empty
+                    const cartItems = document.querySelectorAll('.cart-item');
+                    if (cartItems.length === 0) {
+                        location.reload(); // Reload to show empty cart message
+            }
+                } else {
+                    location.reload(); // Reload for other updates
+                }
+            } else {
+                console.error('Failed to update cart:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating cart:', error);
+        });
+    }
+
+    // WebSocket Connection for Cart Updates
+    let cartSocket;
+    let alertSound;
+    let lastAlertTime = 0;
+    const ALERT_COOLDOWN = 5000; // 5 seconds between alerts
+    
+    function initializeAudio() {
+        alertSound = new Audio('/static/sounds/alert.mp3');
+    }
+    
+    function initializeWebSocket() {
+        console.log("Attempting to connect to WebSocket server");
+        const ws_path = `ws://${ESP8266_IP}:81`;
+        
+        try {
+            if (cartSocket) {
+                cartSocket.close();
+            }
+
+            cartSocket = new WebSocket(ws_path);
+        
+            cartSocket.onopen = function() {
+                console.log('WebSocket connected successfully');
+                updateStatus('Connected to cart!', 'success');
+        };
+        
+            cartSocket.onmessage = function(e) {
+                console.log('WebSocket message received:', e.data);
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.type === 'weight') {
+                        // Get absolute weight value
+                        const absWeight = Math.abs(data.weight);
+                        
+                        // Update current weight display
+        const currentWeight = document.getElementById('currentWeight');
+                        if (currentWeight) {
+                            currentWeight.textContent = `${absWeight.toFixed(3)} kg`;
+                        }
+                        
+                        // Update status bar color based on weight
+        const statusBar = document.getElementById('weightStatusBar');
+                        if (statusBar) {
+                            if (data.weight > 0) {
+            statusBar.classList.remove('bg-red-500');
+            statusBar.classList.add('bg-green-500');
+        } else {
+            statusBar.classList.remove('bg-green-500');
+            statusBar.classList.add('bg-red-500');
+                            }
+                        }
+
+                        // Fetch expected weight from API
+                        fetch('/api/get_cart_weight/')
+                            .then(response => response.json())
+                            .then(weightData => {
+                                if (weightData.success) {
+                                    const expectedWeight = document.getElementById('statusExpectedWeight');
+                                    if (expectedWeight) {
+                                        expectedWeight.textContent = `${weightData.expected_weight.toFixed(3)} kg`;
+                                    }
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error fetching expected weight:', error);
+                            });
+                    }
+                } catch (error) {
+                    console.error('Error parsing WebSocket message:', error);
+                }
+            };
+
+            cartSocket.onclose = function(e) {
+                console.log('WebSocket closed:', e.reason);
+                handleDisconnection();
+            };
+
+            cartSocket.onerror = function(e) {
+                console.error('WebSocket error:', e);
+                handleDisconnection();
+            };
+
+        } catch (error) {
+            console.error('Error creating WebSocket connection:', error);
+            handleDisconnection();
+        }
+    }
+
+    function handleDisconnection() {
+        updateStatus('Disconnected from cart. Attempting to reconnect...', 'error');
+        setTimeout(initializeWebSocket, 1000);
+    }
+
+    function updateStatus(message, type = 'info') {
+        const weightStatus = document.getElementById('weightStatus');
+        if (weightStatus) {
+            const statusText = weightStatus.querySelector('h4');
+            statusText.textContent = message;
+            
+            // Update status color based on type
+            statusText.className = type === 'error' ? 'text-red-500' : 
+                                 type === 'success' ? 'text-green-500' : 
+                                 'text-gray-700';
+        }
+    }
+
+    function showWeightAlert(data) {
+        const now = Date.now();
+        if (now - lastAlertTime < ALERT_COOLDOWN) {
+            return; // Skip alert if too soon
+        }
+        lastAlertTime = now;
+        
+        document.getElementById('weightAlertMessage').textContent = data.message;
+        document.getElementById('expectedWeight').textContent = `${data.expected_weight} kg`;
+        document.getElementById('measuredWeight').textContent = `${data.measured_weight} kg`;
+        document.getElementById('weightDifference').textContent = `${data.difference} kg`;
+        document.getElementById('weightAlertModal').classList.remove('hidden');
+        
+        if (alertSound) {
+            alertSound.play().catch(e => console.log('Error playing sound:', e));
+        }
+    }
+
+    function closeWeightAlert() {
+        document.getElementById('weightAlertModal').classList.add('hidden');
+    }
+
+    // ESP8266 WebSocket Connection
+    let espSocket = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const ESP8266_IP = '192.168.212.54';  // Static IP address
+
+    function initializeESPWebSocket() {
+        console.log("Attempting to connect to ESP8266 WebSocket server");
+        const ws_path = `ws://${ESP8266_IP}:81`;
+        
+        try {
+            if (espSocket) {
+                espSocket.close();
+            }
+
+            espSocket = new WebSocket(ws_path);
+
+            espSocket.onopen = function() {
+                console.log('WebSocket connected successfully to ESP8266');
+                reconnectAttempts = 0;
+                updateStatus('Connected to scanner! Ready to scan products...', 'success');
+            };
+
+            espSocket.onmessage = function(e) {
+                console.log('Received card ID from ESP8266:', e.data);
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.card_id) {
+                        handleScannedProduct(data.card_id);
+                    }
+                } catch (error) {
+                    console.error('Error parsing card ID:', error);
+                }
+            };
+
+            espSocket.onclose = function(e) {
+                console.log('ESP8266 WebSocket closed:', e.reason);
+                handleDisconnection();
+            };
+
+            espSocket.onerror = function(e) {
+                console.error('ESP8266 WebSocket error:', e);
+                handleDisconnection();
+            };
+
+        } catch (error) {
+            console.error('Error creating WebSocket connection:', error);
+            handleDisconnection();
+        }
+    }
+
+    function handleScannedProduct(cardId) {
+        fetch(`/api/scan_product/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                card_id: cardId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Reload the page to show updated cart
+                location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Error handling scanned product:', error);
+        });
+    }
+
+    // Initialize everything when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeAudio();
+        initializeWebSocket();
+        
+        // Add keyboard shortcut to close alert
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeWeightAlert();
+            }
+        });
+    });
+
+    function fetchInitialWeight() {
+        fetch('/api/get_cart_weight/')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateWeightDisplay({
+                        measured_weight: data.measured_weight,
+                        expected_weight: data.expected_weight,
+                        difference: data.difference,
+                        status: 'ok'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching initial weight:', error);
+            });
+    }
+</script>
+{% endblock %}
+{% endblock %} 

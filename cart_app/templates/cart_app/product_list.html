@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+
+{% block title %}Smart Cart{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Smart Cart Scanner</h1>
+        <a href="{% url 'cart' %}" class="text-indigo-600 hover:text-indigo-500">
+            <i class="fas fa-shopping-cart mr-2"></i>View Cart
+            {% if cart_count %}
+            <span class="ml-1 px-2 py-1 text-xs font-bold rounded-full bg-indigo-100 text-indigo-800">{{ cart_count }}</span>
+            {% endif %}
+        </a>
+    </div>
+
+    <!-- Placeholder for scanned products -->
+    <div class="scanned-product-section"></div>
+
+    <!-- Instructions when no product is scanned -->
+    <div class="text-center py-12" id="empty-state">
+        <div class="text-6xl text-gray-400 mb-4">
+            <i class="fas fa-search"></i>
+        </div>
+        <h3 class="text-xl font-medium text-gray-900 mb-2">Scan a Product</h3>
+        <p class="text-gray-500">Please scan an RFID tag to view product details</p>
+    </div>
+</div>
+
+<script>
+    let socket = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const ESP8266_IP = '192.168.212.54';  // Static IP address
+
+    function initializeWebSocket() {
+        console.log("Attempting to connect to WebSocket server");
+        const ws_path = `ws://${ESP8266_IP}:81`;
+        
+        try {
+            if (socket) {
+                socket.close();
+            }
+
+            socket = new WebSocket(ws_path);
+
+            socket.onopen = function() {
+                console.log('WebSocket connected successfully');
+                reconnectAttempts = 0;
+                updateStatus('Connected to scanner! Ready to scan products...', 'success');
+            };
+
+            socket.onmessage = function(e) {
+                console.log('Received card ID from ESP8266:', e.data);
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.card_id) {
+                        handleScannedProduct(data.card_id);
+                    }
+                } catch (error) {
+                    console.error('Error parsing card ID:', error);
+                }
+            };
+
+            socket.onclose = function(e) {
+                console.log('WebSocket closed:', e.reason);
+                handleDisconnection();
+            };
+
+            socket.onerror = function(e) {
+                console.error('WebSocket error:', e);
+                handleDisconnection();
+            };
+
+        } catch (error) {
+            console.error('Error creating WebSocket connection:', error);
+            handleDisconnection();
+        }
+    }
+
+    function handleDisconnection() {
+        updateStatus('Disconnected from scanner. Attempting to reconnect...', 'error');
+        if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            setTimeout(initializeWebSocket, 1000);
+        } else {
+            updateStatus('Failed to connect to scanner. Please refresh the page.', 'error');
+        }
+    }
+
+    function updateStatus(message, type = 'info') {
+        const emptyState = document.getElementById('empty-state');
+        if (emptyState) {
+            const statusText = emptyState.querySelector('p');
+            statusText.textContent = message;
+            statusText.className = type === 'error' ? 'text-red-500' : 
+                                 type === 'success' ? 'text-green-500' : 
+                                 'text-gray-500';
+        }
+    }
+
+    function handleScannedProduct(cardId) {
+        fetch(`/api/scan_product/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                card_id: cardId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Show product details
+            const emptyState = document.getElementById('empty-state');
+            if (emptyState) {
+                    emptyState.style.display = 'none';
+                }
+                
+                const productSection = document.querySelector('.scanned-product-section');
+                if (productSection) {
+                    productSection.innerHTML = `
+                        <div class="bg-white shadow rounded-lg p-6 mb-4">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <img src="${data.product.image || '/static/images/default-product.png'}" 
+                                         alt="${data.product.name}" 
+                                         class="h-24 w-24 object-cover rounded">
+                                </div>
+                                <div class="ml-4">
+                                    <h3 class="text-lg font-medium text-gray-900">${data.product.name}</h3>
+                                    <p class="text-sm text-gray-500">${data.product.description}</p>
+                                    <p class="text-sm text-gray-500">Price: ₹${data.product.price}</p>
+                                    <p class="text-sm text-gray-500">Weight: ${data.product.weight} kg</p>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center justify-between">
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="updateQuantity(${data.product.id}, -1)" 
+                                            class="px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100">
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                    <input type="number" id="quantity-${data.product.id}" 
+                                           value="1" min="1" 
+                                           class="w-16 px-3 py-1 border border-gray-300 rounded-md text-center"
+                                           onchange="updateQuantity(${data.product.id}, 0)">
+                                    <button onclick="updateQuantity(${data.product.id}, 1)"
+                                            class="px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                <button onclick="addToCart(${data.product.id})" 
+                                        class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+                                    Add to Cart
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                updateStatus(data.error || 'Failed to scan product', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error handling scanned product:', error);
+            updateStatus('Failed to scan product. Please try again.', 'error');
+        });
+    }
+
+    function updateQuantity(productId, change) {
+        const quantityInput = document.getElementById(`quantity-${productId}`);
+        const currentQuantity = parseInt(quantityInput.value);
+        const newQuantity = change === 0 ? parseInt(quantityInput.value) : currentQuantity + change;
+        
+        if (newQuantity >= 1) {
+            quantityInput.value = newQuantity;
+            }
+    }
+
+    function addToCart(productId) {
+        const quantityInput = document.getElementById(`quantity-${productId}`);
+        const quantity = parseInt(quantityInput.value);
+        
+        fetch('{% url "add_to_cart" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                product_id: productId,
+                quantity: quantity
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update cart count
+                const cartCount = document.querySelector('.bg-indigo-100');
+                if (cartCount) {
+                    cartCount.textContent = data.cart_count;
+                }
+                
+                // Show success message
+                updateStatus('Product added to cart successfully!', 'success');
+                    
+                    // Reset message after 2 seconds
+                    setTimeout(() => {
+                    updateStatus('Please scan an RFID tag to view product details');
+                    }, 2000);
+            } else {
+                updateStatus(data.error || 'Failed to add product to cart', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error adding to cart:', error);
+            updateStatus('Failed to add product to cart. Please try again.', 'error');
+        });
+    }
+
+    // Initialize WebSocket when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeWebSocket();
+    });
+</script>
+{% endblock %} 

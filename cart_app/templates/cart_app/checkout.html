@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load cart_filters %}
+
+{% block title %}Checkout{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>Checkout Summary</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Order Summary -->
+                        <div class="col-md-8">
+                            <div class="card mb-4 border-0 shadow-sm">
+                                <div class="card-header bg-light">
+                                    <h4 class="mb-0"><i class="fas fa-list-alt me-2"></i>Order Summary</h4>
+                                </div>
+                                <div class="card-body">
+                                    {% for item in cart_items %}
+                                    <div class="d-flex justify-content-between align-items-center mb-4 p-3 bg-light rounded">
+                                        <div class="d-flex align-items-center">
+                                            {% if item.product.image %}
+                                            <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="img-thumbnail me-3" style="width: 80px; height: 80px; object-fit: cover;">
+                                            {% else %}
+                                            <div class="bg-secondary text-white rounded me-3 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                                                <i class="fas fa-box fa-2x"></i>
+                                            </div>
+                                            {% endif %}
+                                            <div>
+                                                <h5 class="mb-1">{{ item.product.name }}</h5>
+                                                <p class="text-muted mb-0">Quantity: {{ item.quantity }}</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <p class="mb-1 fw-bold">₹{{ item.product.price|floatformat:2 }}</p>
+                                            <p class="text-primary mb-0">Total: ₹{{ item.product.price|multiply:item.quantity|floatformat:2 }}</p>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Details -->
+                        <div class="col-md-4">
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-header bg-light">
+                                    <h4 class="mb-0"><i class="fas fa-credit-card me-2"></i>Payment Details</h4>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-4">
+                                        <h5 class="mb-0">Total Amount:</h5>
+                                        <h4 class="text-primary mb-0">₹{{ cart_total|floatformat:2 }}</h4>
+                                    </div>
+                                    <button id="pay-button" class="btn btn-primary btn-lg w-100 py-3">
+                                        <i class="fas fa-lock me-2"></i>Pay Now
+                                    </button>
+                                    <div class="text-center mt-3">
+                                        <small class="text-muted">
+                                            <i class="fas fa-shield-alt me-1"></i>
+                                            Secure Payment Powered by Razorpay
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+var options = {
+    "key": "{{ razorpay_key }}",
+    "amount": "{{ cart_total|multiply:100 }}",
+    "currency": "INR",
+    "name": "Smart Trolley",
+    "description": "Payment for your order",
+    "order_id": "{{ razorpay_order_id }}",
+    "handler": function (response){
+        // Send payment verification to backend
+        fetch('/verify-payment/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = `/order-confirmation/${data.order_id}/`;
+            } else {
+                alert('Payment verification failed: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred during payment verification');
+        });
+    },
+    "prefill": {
+        "name": "{{ user.get_full_name }}",
+        "email": "{{ user.email }}",
+        "contact": "{{ user.phone_number }}"
+    },
+    "theme": {
+        "color": "#0d6efd"
+    }
+};
+
+var rzp = new Razorpay(options);
+document.getElementById('pay-button').onclick = function(e){
+    rzp.open();
+    e.preventDefault();
+}
+</script>
+
+<style>
+.card {
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.card-header {
+    border-bottom: none;
+    padding: 1.25rem;
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: linear-gradient(45deg, #0d6efd, #0a58ca);
+    border: none;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(13, 110, 253, 0.3);
+}
+
+.bg-light {
+    background-color: #f8f9fa !important;
+}
+
+.text-primary {
+    color: #0d6efd !important;
+}
+
+.shadow-sm {
+    box-shadow: 0 .125rem .25rem rgba(0,0,0,.075)!important;
+}
+
+.shadow-lg {
+    box-shadow: 0 1rem 3rem rgba(0,0,0,.175)!important;
+}
+</style>
+{% endblock %} 
